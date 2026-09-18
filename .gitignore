@@ -1,0 +1,10 @@
+/build/
+/dist/*.dll
+/dist/*.exp
+/dist/*.ilk
+/dist/*.lib
+/dist/*.pdb
+/.vs/
+*.user
+*.suo
+*.VC.db
