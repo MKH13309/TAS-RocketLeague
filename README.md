@@ -1,94 +1,79 @@
 # Rocket League TAS Plugin
 
-Hey! This is a tool-assisted replay editor plugin for BakkesMod. Basically, it allows you to record and edit Rocket League runs frame by frame. It captures the car, the ball, and all your controller inputs on every single frame, so you can test difficult shots, fix mistakes, and make super clean TAS runs.
+A BakkesMod plugin for making tool assisted shots (TAS) in Rocket League. It records the car, ball, and inputs every frame so you can edit and replay runs without messing up the physics.
 
-![TAS Plugin Preview](1.png)
+![preview](1.png)
 
-## What it does (Features)
+## Features
 
-- **In-game GUI**: Works directly inside the BakkesMod menu (press F2 -> Plugins tab -> TAS).
-- **Exact frame recording**: Saves the car position, rotation, ball physics, and controller inputs on every frame.
-- **Branching / Editing**: You can jump back to an earlier part of the replay, take control, and record a new branch from there without having to redo everything from scratch.
-- **Start frame slider**: Lets you easily scrub through frames and resume your run from wherever you want.
-- **Undo and Redo**: Made a mistake? Press `Ctrl + Z` (or use `tas_undo`) to go back, and `Ctrl + Y` (or `tas_redo`) to go forward.
-- **Take history slider**: Drag and release the slider to quickly switch between different takes and revisions.
-- **Memory friendly**: It only saves the changed parts (frame tails) in RAM instead of copying the whole replay every time. It keeps up to 64 MB of history so your game doesn't eat all your RAM.
-- **Different speeds for Replay & Record**: You can set separate speeds (for example, slow down time to 0.25x or 0.5x when recording hard inputs, and replay it at normal 1.0x speed).
-- **Simple JSON format**: Runs are saved in clean and readable `.json` files.
-- **Safety checks**: Automatically checks that your map, car hitbox, steering sensitivity, and aerial sensitivity match the original run so the physics don't get desynced.
+- Built-in GUI in BakkesMod (F2 -> Plugins -> TAS)
+- Saves car position, ball, and inputs on every frame
+- Branching: jump back to an earlier frame, take over, and record a new path
+- Start frame slider to resume from any point
+- Undo / redo system (Ctrl+Z / Ctrl+Y) with a take history slider
+- Only keeps the changed frames in memory with a 64MB limit so it doesn't lag the game
+- Separate speeds for replaying and recording (you can slow down the game when recording hard inputs)
+- Saves everything as JSON files
+- Checks that your map, hitbox, and sensitivities match so it doesn't desync
 
-## How to Use It
+## How to use
 
-1. Open Rocket League and go into Freeplay or a custom workshop map.
-2. Press `F2` to open BakkesMod, then go to **Plugins** -> **TAS** -> **Controls**.
-3. Click on **New TAS** and give your run a name.
-4. Set your Replay speed and Record speed (slowing down record speed helps a lot with hard mechanics).
-5. In **Settings**, choose which button should interrupt the replay if you want to take over.
-6. Pick where you want to start using the **Start frame** slider, and hit **Start**.
-7. If the take went well, click **Stop & Update** to save it as a new revision.
-8. If you messed up, click **Stop (Discard)** and it will cancel the take without saving it.
-9. You can drag and release the **Take history** slider to browse your past attempts.
-10. You can also use `Ctrl + Z` / `Ctrl + Y` to undo and redo moves.
-11. When you're done, save your finished TAS under **Loaded TAS**.
+1. Go into freeplay or a workshop map.
+2. Press F2, go to Plugins -> TAS -> Controls.
+3. Click "New TAS" and enter a name.
+4. Set your replay and record speed.
+5. In Settings, set your interrupt key if you want to take over during replay.
+6. Pick your start frame with the slider and click Start.
+7. Click "Stop & Update" if you want to save the attempt as a new revision.
+8. Click "Stop (Discard)" if you messed up and want to trash the attempt.
+9. Use the take history slider or Ctrl+Z / Ctrl+Y to switch between takes.
+10. Save the run under Loaded TAS when you're done.
 
-> **Note on files & memory**: All saved TAS files go into BakkesMod's data folder under `TAS`. If you used the older `BakkesTAS` plugin before, don't worry, it will automatically copy over your old files when you run this for the first time. History is kept in RAM up to a 64 MB budget, and opening or creating a new TAS starts a clean history.
+Replays are saved in your BakkesMod folder under `data/TAS/`. If you had old files from BakkesTAS, it moves them over automatically.
 
-## Console Commands
+## Console commands
 
-If you like using the BakkesMod console (press `F6` or `~`), you can use these commands too:
+You can also use these in the BakkesMod console (F6):
 
-- `tas_start [frame]` - Starts the replay or recording (optional: specify start frame).
-- `tas_stop` - Stops the current run.
-- `tas_update` - Updates the current run.
-- `tas_stopandupdate` - Stops and immediately saves the take.
-- `tas_undo` - Undo the last take (`Ctrl + Z`).
-- `tas_redo` - Redo the undone take (`Ctrl + Y`).
-- `tas_changespeed` - Toggle or adjust replay/record speed.
+- `tas_start [frame]` - start replay/recording
+- `tas_stop` - stop
+- `tas_update` - update the current run
+- `tas_stopandupdate` - stop and save the take
+- `tas_changespeed` - change speed
 
-## Important Things & Compatibility
+### Keybinds
 
-- **Sensitivity & Setup check**: The TAS will only start if your current map, car hitbox, steering sensitivity, and aerial sensitivity match the saved file exactly. Rocket League physics are very strict, so do not change your sensitivities during a run or it will desync!
-- **Notifications**: I recommend enabling notifications in BakkesMod under the **Misc** tab, so you can see status popups and error messages if something doesn't match.
+You can bind commands (like `tas_start` or `tas_stopandupdate`) to a keyboard key or controller button so you don't have to open the menu every time:
+- **Through GUI**: Press F2 and go to the **Bindings** tab to add it.
+- **Through F6 console**: Use the `bind` command:
+  ```text
+  bind XboxTypeS_DPad_Up "tas_start"
+  bind T "tas_stopandupdate"
+  ```
 
-## How to Build
+## Notes & Compatibility
 
-If you want to compile the plugin yourself from source, here is what you need:
+- The plugin checks your map, car hitbox, steering sensitivity, and aerial sensitivity before starting. If anything is different from when you recorded it, it won't run so the physics don't break. Don't change sensitivities mid-run.
+- Turn on notifications in BakkesMod (under Misc) so you can see if the plugin gives an error.
 
-### Requirements:
-- Windows 10 or Windows 11
-- Visual Studio 2022 (make sure the "Desktop development with C++" workload is installed)
-- CMake 3.24 or newer
+## Building from source
 
-All other libraries (Ninja, BakkesMod SDK, ImGui, nlohmann/json) are already included inside the `vendor/` folder, so you don't have to download them separately.
+Requirements:
+- Windows 10/11
+- Visual Studio 2022 (with C++ workload)
+- CMake 3.24+
 
-### Build steps:
+All dependencies (BakkesMod SDK, ImGui, json, ninja) are in the `vendor` folder.
 
-1. Open PowerShell in the project directory.
-2. Run the build script:
-
+To build:
 ```powershell
 .\build.ps1
 ```
+The DLL will be in `dist/TAS.dll`.
 
-The compiled plugin will be in `dist\TAS.dll`. It also automatically builds and runs the core unit tests with CTest.
-
-If you want it to build and copy the `.dll` directly into your BakkesMod plugins folder, run:
-
+To build and copy directly to your BakkesMod folder:
 ```powershell
 .\build.ps1 -Deploy
 ```
+Then load it in the console with `plugin load TAS`.
 
-Then in Rocket League, open the BakkesMod console (`F6`) and type:
-
-```text
-plugin load TAS
-```
-
-## Project Structure
-
-- `src/` - Plugin C++ source code.
-- `tests/` - Unit tests for session and history logic.
-- `vendor/` - Required dependencies (BakkesMod SDK, ImGui, JSON library, etc.).
-- `tools/` - Ninja compiler and setup scripts.
-- `build/` - Folder generated by CMake during compilation.
-- `dist/` - Where the built `TAS.dll` gets placed.
