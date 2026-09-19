@@ -21,7 +21,7 @@ public:
     void stop();
     TickDecision advance(const ControllerInput& input, const TriggerSettings& triggers);
     void appendRecordedFrame(TasFrame frame);
-    bool commitTake();
+    bool commitTake(std::size_t playerIndex = 0);
     bool undoLastTake();
     bool redoLastTake();
     bool moveHistoryTo(std::size_t position);
@@ -47,6 +47,7 @@ public:
 private:
     struct HistoryEntry {
         std::size_t branchFrame{};
+        unsigned int alternateRecordedPlayers{};
         std::vector<TasFrame> alternateTail;
     };
 

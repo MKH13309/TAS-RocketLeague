@@ -2,10 +2,13 @@
 
 #include "bakkesmod/wrappers/WrapperStructs.h"
 
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <string>
 #include <vector>
+
+constexpr std::size_t maxTasPlayers = 2;
 
 struct VectorState {
     float x{};
@@ -87,10 +90,32 @@ struct InputFrame {
     }
 };
 
-struct TasFrame {
+struct PlayerFrame {
     InputFrame input;
     CarState car;
+};
+
+struct TasFrame {
+    std::array<PlayerFrame, maxTasPlayers> players;
     RigidState ball;
+    unsigned int ballTouchPlayers{};
+
+    bool ballTouchedBy(std::size_t player) const {
+        return player < maxTasPlayers &&
+            (ballTouchPlayers & (1U << player)) != 0;
+    }
+
+    void markBallTouch(std::size_t player) {
+        if (player < maxTasPlayers) {
+            ballTouchPlayers |= 1U << player;
+        }
+    }
+
+    void clearBallTouch(std::size_t player) {
+        if (player < maxTasPlayers) {
+            ballTouchPlayers &= ~(1U << player);
+        }
+    }
 };
 
 struct TriggerSettings {
@@ -126,18 +151,32 @@ struct PopupSettings {
     bool confirmDelete{true};
 };
 
+struct BallTrackLock {
+    bool released{true};
+
+    void reset(bool lockToReference) {
+        released = !lockToReference;
+    }
+
+    void release() {
+        released = true;
+    }
+};
+
 struct PluginSettings {
     TriggerSettings triggers;
     PopupSettings popups;
 };
 
 struct TasData {
-    int schemaVersion{2};
+    int schemaVersion{4};
     std::string name;
     Compatibility expected;
     float replaySpeed{1.0f};
     float recordSpeed{0.25f};
-    CarState car;
+    int playerCount{1};
+    unsigned int recordedPlayers{};
+    std::array<CarState, maxTasPlayers> startCars;
     RigidState ball;
     std::vector<TasFrame> frames;
 };

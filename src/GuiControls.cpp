@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <string>
 
 namespace {
 const char* modeName(RunMode mode) {
@@ -14,16 +15,51 @@ const char* modeName(RunMode mode) {
             return "Stopped";
     }
 }
+
+const char* trackState(const TasData& tas, int player) {
+    return (tas.recordedPlayers & (1U << player)) != 0 ? "Recorded" : "Not recorded";
+}
 }
 
 void BakkesTasPlugin::renderControls() {
     ImGui::TextUnformatted("TAS session");
     ImGui::Separator();
+
     if (ImGui::Button("New TAS")) {
         openNewDialog_ = true;
     }
-    ImGui::SameLine();
-    if (ImGui::Button("Start")) {
+
+    const auto* tas = session_.loaded();
+    if (tas && tas->playerCount > 1) {
+        activePlayer_ = std::min<std::size_t>(activePlayer_, 1);
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Active player track");
+        if (!session_.isRunning()) {
+            if (ImGui::RadioButton("Player 1", activePlayer_ == 0)) {
+                activePlayer_ = 0;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Player 2", activePlayer_ == 1)) {
+                activePlayer_ = 1;
+            }
+        } else {
+            ImGui::Text("Player %llu", static_cast<unsigned long long>(activePlayer_ + 1));
+        }
+        ImGui::TextDisabled("Player 1: %s", trackState(*tas, 0));
+        ImGui::SameLine();
+        ImGui::TextDisabled("Player 2: %s", trackState(*tas, 1));
+        if (activePlayer_ == 1 && (tas->recordedPlayers & 1U) == 0) {
+            ImGui::TextWrapped("Record and update Player 1 before starting Player 2.");
+        }
+    } else {
+        activePlayer_ = 0;
+    }
+
+    ImGui::Spacing();
+    const std::string startLabel = tas && tas->playerCount > 1
+        ? "Start Player " + std::to_string(activePlayer_ + 1)
+        : "Start";
+    if (ImGui::Button(startLabel.c_str())) {
         enqueue([this] { startTas(); });
     }
     ImGui::SameLine();
@@ -35,7 +71,6 @@ void BakkesTasPlugin::renderControls() {
         enqueue([this] { stopAndUpdate(); });
     }
 
-    const auto* tas = session_.loaded();
     if (!tas) {
         ImGui::Spacing();
         ImGui::TextWrapped("Create a TAS from the current supported offline session or load one from Files.");
@@ -53,6 +88,13 @@ void BakkesTasPlugin::renderControls() {
     ImGui::Text("Status: %s", modeName(session_.mode()));
     ImGui::Text("Frames: %llu", static_cast<unsigned long long>(tas->frames.size()));
     ImGui::Text("Pending: %llu", static_cast<unsigned long long>(session_.pendingFrames()));
+    if (session_.mode() == RunMode::recording && !tas->frames.empty()) {
+        ImGui::TextDisabled(
+            "Ball path: %s",
+            ballTrackLock_.released ? "Live rewritten path"
+                                    : "Reference before edited-player hit"
+        );
+    }
     if (session_.mode() == RunMode::replaying) {
         ImGui::Text("Current frame: %llu", static_cast<unsigned long long>(session_.cursor()));
     }

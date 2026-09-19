@@ -13,15 +13,17 @@ void BakkesTasPlugin::renderLoadedTas() {
     if (ImGui::InputText("Name", &tas->name)) {
         session_.markDirty();
     }
-    ImGui::Text("Mode: %s", GameMode::displayName(tas->expected.mode).c_str());
-    ImGui::Text("Map: %s", tas->expected.map.c_str());
-    if (tas->expected.mode == "custom_training" && tas->expected.trainingShot >= 0) {
-        ImGui::Text("Training shot: %d", tas->expected.trainingShot + 1);
+    ImGui::Text("Players: %d", tas->playerCount);
+    if (tas->playerCount > 1) {
+        ImGui::Text(
+            "Tracks: P1 %s, P2 %s",
+            (tas->recordedPlayers & 1U) != 0 ? "recorded" : "empty",
+            (tas->recordedPlayers & 2U) != 0 ? "recorded" : "empty"
+        );
     }
-    if (tas->expected.mode == "exhibition" && !tas->expected.matchType.empty()) {
-        ImGui::Text("Match type: %s", tas->expected.matchType.c_str());
-    }
-    ImGui::Text("Expected hitbox: %s", tas->expected.hitbox.c_str());
+    ImGui::Text("Created in: %s", GameMode::displayName(tas->expected.mode).c_str());
+    ImGui::Text("Original map: %s", tas->expected.map.c_str());
+    ImGui::Text("Original hitbox: %s", tas->expected.hitbox.c_str());
     ImGui::Text("Steer sensitivity: %.3f", tas->expected.steerSensitivity);
     ImGui::Text("Air sensitivity: %.3f", tas->expected.airSensitivity);
     ImGui::Text("Frames: %llu", static_cast<unsigned long long>(tas->frames.size()));

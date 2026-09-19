@@ -1,5 +1,6 @@
 #include "JsonCodec.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 using nlohmann::json;
@@ -93,35 +94,98 @@ InputFrame decodeInput(const json& value) {
     return result;
 }
 
-json encodeFrame(const TasFrame& frame) {
+json encodePlayer(const PlayerFrame& player) {
+    return {{"input", encodeInput(player.input)}, {"car", encodeCar(player.car)}};
+}
+
+PlayerFrame decodePlayer(const json& value) {
+    return {decodeInput(value.at("input")), decodeCar(value.at("car"))};
+}
+
+json encodeFrame(const TasFrame& frame, int playerCount) {
+    json players = json::array();
+    for (int index = 0; index < playerCount; ++index) {
+        players.push_back(encodePlayer(frame.players[static_cast<std::size_t>(index)]));
+    }
     return {
-        {"input", encodeInput(frame.input)},
-        {"car", encodeCar(frame.car)},
-        {"ball", encodeRigid(frame.ball)}
+        {"players", std::move(players)},
+        {"ball", encodeRigid(frame.ball)},
+        {"ball_touch_players", frame.ballTouchPlayers}
     };
 }
 
-TasFrame decodeFrame(const json& value) {
-    return {
-        decodeInput(value.at("input")),
-        decodeCar(value.at("car")),
-        decodeRigid(value.at("ball"))
-    };
+TasFrame decodeFrameV3(const json& value, int playerCount) {
+    const auto& players = value.at("players");
+    if (!players.is_array() || players.size() < static_cast<std::size_t>(playerCount)) {
+        throw std::runtime_error("Invalid player frame list");
+    }
+    TasFrame frame;
+    for (int index = 0; index < playerCount; ++index) {
+        frame.players[static_cast<std::size_t>(index)] = decodePlayer(players.at(index));
+    }
+    frame.ball = decodeRigid(value.at("ball"));
+    frame.ballTouchPlayers = value.value("ball_touch_players", 0U);
+    frame.ballTouchPlayers &= (1U << playerCount) - 1U;
+    return frame;
+}
+
+TasFrame decodeFrameV2(const json& value) {
+    TasFrame frame;
+    frame.players[0] = {decodeInput(value.at("input")), decodeCar(value.at("car"))};
+    frame.ball = decodeRigid(value.at("ball"));
+    return frame;
+}
+
+void inferLegacyBallTouches(TasData& tas) {
+    constexpr float touchDistanceSquared = 230.0f * 230.0f;
+    for (auto& frame : tas.frames) {
+        for (int player = 0; player < tas.playerCount; ++player) {
+            const auto playerIndex = static_cast<std::size_t>(player);
+            if ((tas.recordedPlayers & (1U << playerIndex)) == 0) {
+                continue;
+            }
+            const auto& car = frame.players[playerIndex].car.rigidBody.location;
+            const auto& ball = frame.ball.location;
+            const auto dx = car.x - ball.x;
+            const auto dy = car.y - ball.y;
+            const auto dz = car.z - ball.z;
+            if (dx * dx + dy * dy + dz * dz <= touchDistanceSquared) {
+                frame.markBallTouch(playerIndex);
+            }
+        }
+    }
+}
+
+void decodeCompatibility(const json& value, Compatibility& result) {
+    result.mode = value.value("mode", "freeplay");
+    result.map = value.value("map", "");
+    result.matchType = value.value("match_type", "");
+    result.trainingShot = value.value("training_shot", -1);
+    result.hitbox = value.at("hitbox").get<std::string>();
+    result.hitboxExtent = decodeVector(value.at("hitbox_extent"));
+    result.steerSensitivity = value.at("steer_sensitivity").get<float>();
+    result.airSensitivity = value.at("air_sensitivity").get<float>();
 }
 }
 
 json JsonCodec::encodeTas(const TasData& tas) {
+    const auto playerCount = std::clamp(tas.playerCount, 1, static_cast<int>(maxTasPlayers));
     json frames = json::array();
     for (const auto& frame : tas.frames) {
-        frames.push_back(encodeFrame(frame));
+        frames.push_back(encodeFrame(frame, playerCount));
+    }
+    json startPlayers = json::array();
+    for (int index = 0; index < playerCount; ++index) {
+        startPlayers.push_back(encodeCar(tas.startCars[static_cast<std::size_t>(index)]));
     }
 
     return {
-        {"schema_version", tas.schemaVersion},
+        {"schema_version", 4},
         {"name", tas.name},
+        {"player_count", playerCount},
+        {"recorded_players", tas.recordedPlayers},
         {"expected", {
-            {"mode", tas.expected.mode},
-            {"map", tas.expected.map},
+            {"mode", tas.expected.mode}, {"map", tas.expected.map},
             {"match_type", tas.expected.matchType},
             {"training_shot", tas.expected.trainingShot},
             {"hitbox", tas.expected.hitbox},
@@ -130,45 +194,70 @@ json JsonCodec::encodeTas(const TasData& tas) {
             {"air_sensitivity", tas.expected.airSensitivity}
         }},
         {"speeds", {{"replay", tas.replaySpeed}, {"record", tas.recordSpeed}}},
-        {"start", {{"car", encodeCar(tas.car)}, {"ball", encodeRigid(tas.ball)}}},
+        {"start", {{"players", std::move(startPlayers)}, {"ball", encodeRigid(tas.ball)}}},
         {"frames", std::move(frames)}
     };
 }
 
 TasData JsonCodec::decodeTas(const json& value) {
-    TasData tas;
-    tas.schemaVersion = value.at("schema_version").get<int>();
-    if (tas.schemaVersion == 1) {
+    const auto schema = value.at("schema_version").get<int>();
+    if (schema == 1) {
         throw std::runtime_error("Older TAS files must be recreated");
     }
-    if (tas.schemaVersion != 2) {
+    if (schema != 2 && schema != 3 && schema != 4) {
         throw std::runtime_error("Unsupported TAS schema version");
     }
+
+    TasData tas;
+    tas.schemaVersion = 4;
     tas.name = value.at("name").get<std::string>();
-
-    const auto& expected = value.at("expected");
-    tas.expected.mode = expected.value("mode", "freeplay");
-    tas.expected.map = expected.at("map").get<std::string>();
-    tas.expected.matchType = expected.value("match_type", "");
-    tas.expected.trainingShot = expected.value("training_shot", -1);
-    tas.expected.hitbox = expected.at("hitbox").get<std::string>();
-    tas.expected.hitboxExtent = decodeVector(expected.at("hitbox_extent"));
-    tas.expected.steerSensitivity = expected.at("steer_sensitivity").get<float>();
-    tas.expected.airSensitivity = expected.at("air_sensitivity").get<float>();
-
+    decodeCompatibility(value.at("expected"), tas.expected);
     const auto& speeds = value.at("speeds");
     tas.replaySpeed = speeds.at("replay").get<float>();
     tas.recordSpeed = speeds.at("record").get<float>();
-    tas.car = decodeCar(value.at("start").at("car"));
-    tas.ball = decodeRigid(value.at("start").at("ball"));
 
     const auto& frames = value.at("frames");
     if (!frames.is_array() || frames.size() > 10'000'000) {
         throw std::runtime_error("Invalid frame list");
     }
+
+    if (schema == 2) {
+        tas.playerCount = 1;
+        tas.startCars[0] = decodeCar(value.at("start").at("car"));
+        tas.ball = decodeRigid(value.at("start").at("ball"));
+        tas.frames.reserve(frames.size());
+        for (const auto& frame : frames) {
+            tas.frames.push_back(decodeFrameV2(frame));
+        }
+        tas.recordedPlayers = tas.frames.empty() ? 0U : 1U;
+        inferLegacyBallTouches(tas);
+        return tas;
+    }
+
+    tas.playerCount = value.value("player_count", 1);
+    if (tas.playerCount < 1 || tas.playerCount > static_cast<int>(maxTasPlayers)) {
+        throw std::runtime_error("Unsupported TAS player count");
+    }
+    const auto& startPlayers = value.at("start").at("players");
+    if (!startPlayers.is_array() ||
+        startPlayers.size() < static_cast<std::size_t>(tas.playerCount)) {
+        throw std::runtime_error("Invalid starting player list");
+    }
+    for (int index = 0; index < tas.playerCount; ++index) {
+        tas.startCars[static_cast<std::size_t>(index)] = decodeCar(startPlayers.at(index));
+    }
+    tas.ball = decodeRigid(value.at("start").at("ball"));
     tas.frames.reserve(frames.size());
     for (const auto& frame : frames) {
-        tas.frames.push_back(decodeFrame(frame));
+        tas.frames.push_back(decodeFrameV3(frame, tas.playerCount));
+    }
+    tas.recordedPlayers = value.value(
+        "recorded_players",
+        tas.frames.empty() ? 0U : 1U
+    );
+    tas.recordedPlayers &= (1U << tas.playerCount) - 1U;
+    if (schema < 4) {
+        inferLegacyBallTouches(tas);
     }
     return tas;
 }

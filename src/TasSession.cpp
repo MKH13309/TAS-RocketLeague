@@ -6,6 +6,8 @@
 
 void TasSession::setTas(TasData tas, bool dirty) {
     stop();
+    tas.playerCount = std::clamp(tas.playerCount, 1, static_cast<int>(maxTasPlayers));
+    tas.recordedPlayers &= (1U << tas.playerCount) - 1U;
     tas_ = std::move(tas);
     dirty_ = dirty;
     take_.clear();
@@ -69,14 +71,16 @@ void TasSession::appendRecordedFrame(TasFrame frame) {
     }
 }
 
-bool TasSession::commitTake() {
-    if (!tas_ || mode_ != RunMode::idle || !recordingStarted_) {
+bool TasSession::commitTake(std::size_t playerIndex) {
+    if (!tas_ || mode_ != RunMode::idle || !recordingStarted_ ||
+        playerIndex >= static_cast<std::size_t>(tas_->playerCount)) {
         return false;
     }
 
     const auto branch = std::min(branchFrame_, tas_->frames.size());
     HistoryEntry history;
     history.branchFrame = branch;
+    history.alternateRecordedPlayers = tas_->recordedPlayers;
     history.alternateTail.reserve(tas_->frames.size() - branch);
     history.alternateTail.insert(
         history.alternateTail.end(),
@@ -93,6 +97,7 @@ bool TasSession::commitTake() {
         std::make_move_iterator(take_.begin()),
         std::make_move_iterator(take_.end())
     );
+    tas_->recordedPlayers |= 1U << playerIndex;
     undoStack_.push_back(std::move(history));
     redoStack_.clear();
     std::vector<TasFrame>().swap(take_);
@@ -239,6 +244,9 @@ bool TasSession::swapHistory(
         std::make_move_iterator(history.alternateTail.begin()),
         std::make_move_iterator(history.alternateTail.end())
     );
+    const auto currentRecordedPlayers = tas_->recordedPlayers;
+    tas_->recordedPlayers = history.alternateRecordedPlayers;
+    history.alternateRecordedPlayers = currentRecordedPlayers;
     history.alternateTail = std::move(currentTail);
     to.push_back(std::move(history));
     dirty_ = true;

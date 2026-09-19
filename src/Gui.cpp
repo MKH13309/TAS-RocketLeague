@@ -68,6 +68,14 @@ void BakkesTasPlugin::renderNewTasDialog() {
     }
 
     ImGui::InputText("Name", &newTasName_);
+    bool twoPlayers = newTasPlayerCount_ == 2;
+    if (ImGui::Checkbox("Two-player TAS", &twoPlayers)) {
+        newTasPlayerCount_ = twoPlayers ? 2 : 1;
+    }
+    if (twoPlayers) {
+        ImGui::TextDisabled("Requires an offline exhibition match with another car.");
+    }
+
     const bool needsAcknowledgement = settings_.popups.confirmNew && session_.isDirty();
     if (needsAcknowledgement) {
         ImGui::Spacing();
@@ -79,7 +87,8 @@ void BakkesTasPlugin::renderNewTasDialog() {
 
     if (ImGui::Button("Create") && canCreate) {
         const auto name = newTasName_;
-        enqueue([this, name] { createTas(name); });
+        const auto playerCount = newTasPlayerCount_;
+        enqueue([this, name, playerCount] { createTas(name, playerCount); });
         ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();
@@ -102,7 +111,7 @@ void BakkesTasPlugin::renderConfirmationDialog() {
 
     switch (pendingAction_) {
         case PendingAction::update:
-            ImGui::TextWrapped("Replace the TAS from the branch frame with this take?");
+            ImGui::TextWrapped("Replace the active player track from the branch frame?");
             break;
         case PendingAction::load:
             ImGui::TextWrapped("Load another TAS and discard unsaved changes?");

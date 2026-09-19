@@ -9,6 +9,7 @@
 #include "imgui.h"
 #include "imgui_stdlib.h"
 
+#include <cstddef>
 #include <filesystem>
 #include <functional>
 #include <mutex>
@@ -41,19 +42,25 @@ private:
     PendingAction pendingAction_{PendingAction::none};
     std::string newTasName_{"New TAS"};
     std::recursive_mutex stateMutex_;
+    std::size_t activePlayer_{};
+    int newTasPlayerCount_{1};
     int startFrame_{};
     int historyTarget_{};
     bool openNewDialog_{};
     bool openConfirmDialog_{};
     bool newTasAcknowledged_{};
+    BallTrackLock ballTrackLock_;
+    unsigned int pendingBallTouchPlayers_{};
+    bool injectingDummyInput_{};
     bool alternateSpeed_{};
     bool undoChordDown_{};
     bool redoChordDown_{};
 
     void registerCommands();
     void handleInput(CarWrapper car, void* params, const std::string& eventName);
+    void handleBallTouch(class BallWrapper ball, void* params);
     void enqueue(std::function<void()> action);
-    void createTas(const std::string& name);
+    void createTas(const std::string& name, int playerCount);
     void startTas();
     void stopTas();
     void updateTas();

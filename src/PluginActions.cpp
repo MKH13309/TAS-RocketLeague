@@ -21,12 +21,13 @@ int lastFrameIndex(const TasData& tas) {
 }
 }
 
-void BakkesTasPlugin::createTas(const std::string& name) {
+void BakkesTasPlugin::createTas(const std::string& name, int playerCount) {
     if (session_.isRunning()) {
         stopTas();
     }
     TasData tas;
     tas.name = name;
+    tas.playerCount = std::clamp(playerCount, 1, static_cast<int>(maxTasPlayers));
     if (const auto* previous = session_.loaded()) {
         tas.replaySpeed = previous->replaySpeed;
         tas.recordSpeed = previous->recordSpeed;
@@ -38,9 +39,12 @@ void BakkesTasPlugin::createTas(const std::string& name) {
         return;
     }
     session_.setTas(std::move(tas), true);
+    ballTrackLock_.reset(false);
+    pendingBallTouchPlayers_ = 0;
+    activePlayer_ = 0;
     startFrame_ = 0;
     historyTarget_ = 0;
-    notify("New TAS captured");
+    notify(playerCount > 1 ? "New two-player TAS captured" : "New TAS captured");
 }
 
 void BakkesTasPlugin::startTas() {
@@ -49,9 +53,18 @@ void BakkesTasPlugin::startTas() {
         notify("Create or load a TAS first", true);
         return;
     }
+    activePlayer_ = std::min<std::size_t>(
+        activePlayer_, static_cast<std::size_t>(tas->playerCount - 1)
+    );
+    if (activePlayer_ == 1 && (tas->recordedPlayers & 1U) == 0) {
+        notify("Record and update Player 1 before recording Player 2", true);
+        return;
+    }
+
     const bool discardedTake = session_.hasPendingTake();
     if (session_.isRunning()) {
         session_.stop();
+        WorldState::setSessionProtection(*gameWrapper, false);
     }
     if (session_.hasPendingTake()) {
         session_.discardTake();
@@ -70,37 +83,50 @@ void BakkesTasPlugin::startTas() {
     }
 
     const bool restored = startFrame_ == 0
-        ? WorldState::restore(*gameWrapper, *tas, error)
+        ? WorldState::restore(*gameWrapper, *tas, activePlayer_, error)
         : WorldState::restoreFrame(
             *gameWrapper,
+            *tas,
             tas->frames[static_cast<std::size_t>(startFrame_)],
+            activePlayer_,
             error
         );
     if (!restored) {
         notify(error, true);
         return;
     }
+    ballTrackLock_.reset(!tas->frames.empty());
+    pendingBallTouchPlayers_ = 0;
+    WorldState::setSessionProtection(*gameWrapper, true);
     if (!session_.start(static_cast<std::size_t>(startFrame_))) {
+        WorldState::setSessionProtection(*gameWrapper, false);
+        ballTrackLock_.reset(false);
+    pendingBallTouchPlayers_ = 0;
         notify("TAS could not be started", true);
         return;
     }
 
     alternateSpeed_ = false;
     applyModeSpeed();
+    const auto player = std::to_string(activePlayer_ + 1);
     if (session_.mode() == RunMode::replaying) {
-        notify("Replay started at frame " + std::to_string(startFrame_));
+        notify("Player " + player + " replay started at frame " + std::to_string(startFrame_));
     } else {
-        notify("Recording started");
+        notify("Player " + player + " recording started");
     }
 }
 
 void BakkesTasPlugin::stopTas() {
     if (!session_.isRunning()) {
+        WorldState::setSessionProtection(*gameWrapper, false);
         notify("TAS is already stopped", true);
         return;
     }
     const bool discardedTake = session_.hasPendingTake();
     session_.stop();
+    WorldState::setSessionProtection(*gameWrapper, false);
+    ballTrackLock_.reset(false);
+    pendingBallTouchPlayers_ = 0;
     if (discardedTake) {
         session_.discardTake();
     }
@@ -110,19 +136,22 @@ void BakkesTasPlugin::stopTas() {
 }
 
 void BakkesTasPlugin::updateTas() {
-    if (!session_.commitTake()) {
+    if (!session_.commitTake(activePlayer_)) {
         notify("No stopped take is ready to update", true);
         return;
     }
+    ballTrackLock_.reset(false);
+    pendingBallTouchPlayers_ = 0;
     const auto* tas = session_.loaded();
     startFrame_ = tas ? std::clamp(startFrame_, 0, lastFrameIndex(*tas)) : 0;
     historyTarget_ = static_cast<int>(session_.historyPosition());
-    notify("Take updated");
+    notify("Player " + std::to_string(activePlayer_ + 1) + " take updated");
 }
 
 void BakkesTasPlugin::stopAndUpdate() {
     if (session_.isRunning()) {
         session_.stop();
+        WorldState::setSessionProtection(*gameWrapper, false);
         alternateSpeed_ = false;
         setGameSpeed(1.0f);
     }
@@ -130,12 +159,8 @@ void BakkesTasPlugin::stopAndUpdate() {
 }
 
 void BakkesTasPlugin::undoLastTake() {
-    if (session_.isRunning()) {
-        notify("Stop the TAS before moving through take history", true);
-        return;
-    }
-    if (session_.hasPendingTake()) {
-        notify("Update or discard the pending take first", true);
+    if (session_.isRunning() || session_.hasPendingTake()) {
+        notify("Stop and resolve the pending take before using history", true);
         return;
     }
     if (!session_.undoLastTake()) {
@@ -149,12 +174,8 @@ void BakkesTasPlugin::undoLastTake() {
 }
 
 void BakkesTasPlugin::redoLastTake() {
-    if (session_.isRunning()) {
-        notify("Stop the TAS before moving through take history", true);
-        return;
-    }
-    if (session_.hasPendingTake()) {
-        notify("Update or discard the pending take first", true);
+    if (session_.isRunning() || session_.hasPendingTake()) {
+        notify("Stop and resolve the pending take before using history", true);
         return;
     }
     if (!session_.redoLastTake()) {
@@ -234,7 +255,10 @@ void BakkesTasPlugin::loadTas(const std::filesystem::path& path) {
         return;
     }
     session_.setTas(std::move(*tas), false);
+    ballTrackLock_.reset(false);
+    pendingBallTouchPlayers_ = 0;
     selectedFile_ = path;
+    activePlayer_ = 0;
     startFrame_ = 0;
     historyTarget_ = 0;
     alternateSpeed_ = false;
