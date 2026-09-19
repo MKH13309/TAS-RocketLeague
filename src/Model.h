@@ -38,7 +38,10 @@ struct CarState {
 };
 
 struct Compatibility {
+    std::string mode{"freeplay"};
     std::string map;
+    std::string matchType;
+    int trainingShot{-1};
     std::string hitbox;
     VectorState hitboxExtent;
     float steerSensitivity{1.0f};

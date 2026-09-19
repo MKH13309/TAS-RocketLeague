@@ -1,4 +1,6 @@
 #include "Plugin.h"
+#include "GameContext.h"
+#include "GameMode.h"
 #include "WorldState.h"
 
 #include "bakkesmod/wrappers/GameEvent/ServerWrapper.h"
@@ -206,7 +208,7 @@ void BakkesTasPlugin::saveTas() {
         return;
     }
     if (session_.isRunning() || session_.hasPendingTake()) {
-        notify("Stop and update or discard the take before saving", true);
+        notify("Use Stop & Update to keep the take, or Stop to discard it", true);
         return;
     }
     std::string error;
@@ -261,10 +263,10 @@ void BakkesTasPlugin::refreshFiles() {
 }
 
 void BakkesTasPlugin::setGameSpeed(float speed) {
-    if (!gameWrapper->IsInFreeplay()) {
+    if (!GameMode::isSupported(*gameWrapper)) {
         return;
     }
-    auto server = gameWrapper->GetGameEventAsServer();
+    auto server = GameContext::server(*gameWrapper);
     if (server) {
         server.SetGameSpeed(std::clamp(speed, 0.01f, 2.0f));
     }

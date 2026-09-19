@@ -19,7 +19,6 @@ const char* modeName(RunMode mode) {
 void BakkesTasPlugin::renderControls() {
     ImGui::TextUnformatted("TAS session");
     ImGui::Separator();
-
     if (ImGui::Button("New TAS")) {
         openNewDialog_ = true;
     }
@@ -39,7 +38,7 @@ void BakkesTasPlugin::renderControls() {
     const auto* tas = session_.loaded();
     if (!tas) {
         ImGui::Spacing();
-        ImGui::TextWrapped("Create a TAS from your current freeplay state or load one from Files.");
+        ImGui::TextWrapped("Create a TAS from the current supported offline session or load one from Files.");
         return;
     }
 

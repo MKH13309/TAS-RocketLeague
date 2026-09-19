@@ -1,4 +1,6 @@
 #include "WorldState.h"
+#include "GameContext.h"
+#include "GameMode.h"
 
 #include "bakkesmod/wrappers/GameEvent/ServerWrapper.h"
 #include "bakkesmod/wrappers/GameObject/BallWrapper.h"
@@ -29,12 +31,11 @@ float hitboxError(Vector extent, Vector dimensions, float scale) {
 }
 
 bool WorldState::capture(GameWrapper& game, TasData& tas, std::string& error) {
-    if (!game.IsInFreeplay()) {
-        error = "Open freeplay or a custom map first";
+    if (!GameMode::requireSupported(game, error)) {
         return false;
     }
-    auto car = game.GetLocalCar();
-    auto server = game.GetGameEventAsServer();
+    auto car = GameContext::localCar(game);
+    auto server = GameContext::server(game);
     if (!car || !server) {
         error = "The local car is not available";
         return false;
@@ -52,12 +53,11 @@ bool WorldState::capture(GameWrapper& game, TasData& tas, std::string& error) {
 }
 
 bool WorldState::restore(GameWrapper& game, const TasData& tas, std::string& error) {
-    if (!game.IsInFreeplay()) {
-        error = "Open freeplay or a custom map first";
+    if (!GameMode::requireSupported(game, error)) {
         return false;
     }
-    auto car = game.GetLocalCar();
-    auto server = game.GetGameEventAsServer();
+    auto car = GameContext::localCar(game);
+    auto server = GameContext::server(game);
     if (!car || !server) {
         error = "The local car is not available";
         return false;
@@ -80,12 +80,11 @@ bool WorldState::restoreFrame(
     const TasFrame& frame,
     std::string& error
 ) {
-    if (!game.IsInFreeplay()) {
-        error = "Open freeplay or a custom map first";
+    if (!GameMode::requireSupported(game, error)) {
         return false;
     }
-    auto car = game.GetLocalCar();
-    auto server = game.GetGameEventAsServer();
+    auto car = GameContext::localCar(game);
+    auto server = GameContext::server(game);
     if (!car || !server) {
         error = "The local car is not available";
         return false;
@@ -104,20 +103,16 @@ bool WorldState::restoreFrame(
 }
 
 bool WorldState::validate(GameWrapper& game, const TasData& tas, std::string& error) {
-    if (!game.IsInFreeplay()) {
-        error = "Open freeplay or a custom map first";
+    if (!GameMode::requireSupported(game, error)) {
         return false;
     }
-    auto car = game.GetLocalCar();
+    auto car = GameContext::localCar(game);
     if (!car) {
         error = "The local car is not available";
         return false;
     }
+
     const auto current = currentCompatibility(game, car);
-    if (current.map != tas.expected.map) {
-        error = "Map mismatch: expected " + tas.expected.map;
-        return false;
-    }
     if (current.hitbox != tas.expected.hitbox) {
         error = "Hitbox mismatch: expected " + tas.expected.hitbox;
         return false;
@@ -139,7 +134,7 @@ bool WorldState::captureFrame(
     const ControllerInput& input,
     TasFrame& frame
 ) {
-    auto server = game.GetGameEventAsServer();
+    auto server = GameContext::server(game);
     if (!car || !server) {
         return false;
     }
@@ -159,7 +154,7 @@ bool WorldState::applyFrame(
     const TasFrame& frame,
     ControllerInput& input
 ) {
-    auto server = game.GetGameEventAsServer();
+    auto server = GameContext::server(game);
     if (!car || !server) {
         return false;
     }
@@ -228,13 +223,17 @@ void WorldState::applyCar(CarWrapper car, const CarState& state) {
 Compatibility WorldState::currentCompatibility(GameWrapper& game, CarWrapper car) {
     const auto extent = car.GetLocalCollisionExtent();
     const auto gamepad = game.GetSettings().GetGamepadSettings();
-    return {
-        game.GetCurrentMap(),
-        classifyHitbox(extent),
-        toState(extent),
-        gamepad.SteeringSensitivity,
-        gamepad.AirControlSensitivity
-    };
+    const auto mode = GameMode::current(game);
+    Compatibility result;
+    result.mode = mode.id;
+    result.map = game.GetCurrentMap();
+    result.matchType = mode.matchType;
+    result.trainingShot = mode.trainingShot;
+    result.hitbox = classifyHitbox(extent);
+    result.hitboxExtent = toState(extent);
+    result.steerSensitivity = gamepad.SteeringSensitivity;
+    result.airSensitivity = gamepad.AirControlSensitivity;
+    return result;
 }
 
 std::string WorldState::classifyHitbox(Vector extent) {

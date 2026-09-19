@@ -1,4 +1,6 @@
 #include "Plugin.h"
+#include "GameContext.h"
+#include "GameMode.h"
 #include "WorldState.h"
 
 #include <Windows.h>
@@ -12,7 +14,7 @@ BAKKESMOD_PLUGIN(
     BakkesTasPlugin,
     "TAS",
     "1.0.0",
-    PLUGINTYPE_FREEPLAY
+    PLUGINTYPE_FREEPLAY | PLUGINTYPE_CUSTOM_TRAINING
 )
 
 void BakkesTasPlugin::onLoad() {
@@ -49,15 +51,14 @@ void BakkesTasPlugin::onLoad() {
             handleInput(car, params, eventName);
         }
     );
-    gameWrapper->HookEvent(
-        "Function TAGame.GameEvent_Tutorial_TA.Destroyed",
-        [this](const std::string&) {
-            std::lock_guard<std::recursive_mutex> lock(stateMutex_);
-            if (session_.isRunning()) {
-                stopTas();
-            }
+    const auto stopOnDestroy = [this](const std::string&) {
+        std::lock_guard<std::recursive_mutex> lock(stateMutex_);
+        if (session_.isRunning()) {
+            stopTas();
         }
-    );
+    };
+    gameWrapper->HookEvent("Function TAGame.GameEvent_Tutorial_TA.Destroyed", stopOnDestroy);
+    gameWrapper->HookEvent("Function TAGame.GameEvent_Soccar_TA.Destroyed", stopOnDestroy);
     notify("TAS loaded");
 }
 
@@ -67,6 +68,7 @@ void BakkesTasPlugin::onUnload() {
     setGameSpeed(1.0f);
     gameWrapper->UnhookEvent("Function TAGame.Car_TA.SetVehicleInput");
     gameWrapper->UnhookEvent("Function TAGame.GameEvent_Tutorial_TA.Destroyed");
+    gameWrapper->UnhookEvent("Function TAGame.GameEvent_Soccar_TA.Destroyed");
 }
 
 void BakkesTasPlugin::registerCommands() {
@@ -125,7 +127,7 @@ void BakkesTasPlugin::handleInput(
     if (!params) {
         return;
     }
-    const auto localCar = gameWrapper->GetLocalCar();
+    const auto localCar = GameContext::localCar(*gameWrapper);
     if (!localCar || localCar.memory_address != car.memory_address) {
         return;
     }
@@ -150,6 +152,15 @@ void BakkesTasPlugin::handleInput(
         redoChordDown_ = false;
     }
 
+    if (session_.isRunning() && !GameMode::isSupported(*gameWrapper)) {
+        const bool discardTake = session_.hasPendingTake();
+        session_.stop();
+        if (discardTake) {
+            session_.discardTake();
+        }
+        notify("TAS stopped because the current mode is not supported", true);
+        return;
+    }
     if (!session_.isRunning()) {
         return;
     }

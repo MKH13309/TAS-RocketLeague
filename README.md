@@ -15,10 +15,11 @@ A BakkesMod plugin for making tool assisted shots (TAS) in Rocket League. It rec
 - Separate speeds for replaying and recording (you can slow down the game when recording hard inputs)
 - Saves everything as JSON files
 - Checks that your map, hitbox, and sensitivities match so it doesn't desync
+- Works in freeplay, workshop maps, and offline matches
 
 ## How to use
 
-1. Go into freeplay or a workshop map.
+1. Go into freeplay, an offline match, or a workshop map.
 2. Press F2, go to Plugins -> TAS -> Controls.
 3. Click "New TAS" and enter a name.
 4. Set your replay and record speed.

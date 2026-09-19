@@ -16,6 +16,8 @@ option(TAS_BUILD_TESTS "Build TAS core tests" ON)
 add_library(TAS SHARED
     src/Plugin.cpp
     src/PluginActions.cpp
+    src/GameContext.cpp
+    src/GameMode.cpp
     src/TasSession.cpp
     src/JsonCodec.cpp
     src/JsonStore.cpp
@@ -65,9 +67,11 @@ if(TAS_BUILD_TESTS)
     add_executable(TASCoreTests
         tests/TasSessionTests.cpp
         src/TasSession.cpp
+        src/JsonCodec.cpp
     )
     target_include_directories(TASCoreTests PRIVATE
         src
+        vendor
         "${BAKKESMOD_SDK}/include"
     )
     target_compile_definitions(TASCoreTests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)

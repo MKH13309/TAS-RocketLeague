@@ -1,4 +1,4 @@
-﻿#include "JsonCodec.h"
+#include "JsonCodec.h"
 
 #include <stdexcept>
 
@@ -120,7 +120,11 @@ json JsonCodec::encodeTas(const TasData& tas) {
         {"schema_version", tas.schemaVersion},
         {"name", tas.name},
         {"expected", {
-            {"map", tas.expected.map}, {"hitbox", tas.expected.hitbox},
+            {"mode", tas.expected.mode},
+            {"map", tas.expected.map},
+            {"match_type", tas.expected.matchType},
+            {"training_shot", tas.expected.trainingShot},
+            {"hitbox", tas.expected.hitbox},
             {"hitbox_extent", encodeVector(tas.expected.hitboxExtent)},
             {"steer_sensitivity", tas.expected.steerSensitivity},
             {"air_sensitivity", tas.expected.airSensitivity}
@@ -143,7 +147,10 @@ TasData JsonCodec::decodeTas(const json& value) {
     tas.name = value.at("name").get<std::string>();
 
     const auto& expected = value.at("expected");
+    tas.expected.mode = expected.value("mode", "freeplay");
     tas.expected.map = expected.at("map").get<std::string>();
+    tas.expected.matchType = expected.value("match_type", "");
+    tas.expected.trainingShot = expected.value("training_shot", -1);
     tas.expected.hitbox = expected.at("hitbox").get<std::string>();
     tas.expected.hitboxExtent = decodeVector(expected.at("hitbox_extent"));
     tas.expected.steerSensitivity = expected.at("steer_sensitivity").get<float>();
@@ -203,4 +210,3 @@ PluginSettings JsonCodec::decodeSettings(const json& value) {
     settings.popups.confirmDelete = popup.value("delete", true);
     return settings;
 }
-
