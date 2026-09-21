@@ -79,3 +79,6 @@ To build and copy directly to your BakkesMod folder:
 ```
 Then load it in the console with `plugin load TAS`.
 
+---
+
+This project was made in collaboration with a local version of Qwen 3.8 27B.
